@@ -99,4 +99,31 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .allday-row{display:flex;align-items:center;gap:6px;font-size:13px;color:#444;margin-bottom:12px;cursor:pointer}
 .allday-row input{width:auto}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;padding:11px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:200;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+/* Today view: prompt + cards */
+#view-today{max-width:680px;margin:0 auto}
+.prompt-card{background:linear-gradient(135deg,#5b51c9,#7a4fd0);border-radius:16px;padding:18px;margin-bottom:24px;box-shadow:0 4px 18px rgba(83,74,183,.25)}
+.prompt-label{color:#fff;font-size:14px;font-weight:600;margin-bottom:10px;opacity:.95}
+.prompt-input{width:100%;min-height:62px;padding:12px 14px;border:none;border-radius:10px;font-size:15px;resize:vertical;line-height:1.45;outline:none}
+.prompt-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
+.prompt-actions .btn-save{background:#fff;color:#4a3fb0;font-weight:600}
+.prompt-actions .btn-save:hover{background:#f3f1ff}
+.prompt-actions .text-btn{border-color:rgba(255,255,255,.4);background:transparent;color:#fff}
+.prompt-actions .text-btn:hover{background:rgba(255,255,255,.12)}
+.day-header{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.day-header h2{font-size:20px;font-weight:700}
+.day-date{font-size:14px;color:#999}
+.today-cards{display:flex;flex-direction:column;gap:10px}
+.empty-card{background:#fff;border:1px solid #e8e6e0;border-radius:12px;padding:28px;text-align:center;color:#999;font-size:14px}
+.event-card{display:flex;align-items:flex-start;gap:14px;background:#fff;border:1px solid #e8e6e0;border-left:4px solid #534ab7;border-radius:12px;padding:14px 16px}
+.ec-time{font-size:13px;font-weight:700;color:#444;min-width:74px;flex-shrink:0;padding-top:1px}
+.ec-body{flex:1;min-width:0}
+.ec-title{font-size:15px;font-weight:600;color:#1a1a18;margin-bottom:3px}
+.ec-loc{font-size:13px;color:#777;margin-bottom:5px;word-break:break-word}
+.ec-travel{font-size:12px}
+.ec-travel .muted{color:#bbb}
+.travel-chip{display:inline-block;background:#eef6f0;color:#0f6e56;border-radius:6px;padding:3px 9px;font-weight:600}
+.travel-chip.urgent{background:#fdecec;color:#c0392b}
+.ec-directions{flex-shrink:0;align-self:center;font-size:13px;font-weight:600;color:#534ab7;text-decoration:none;white-space:nowrap}
+.ec-directions:hover{text-decoration:underline}
+@media(max-width:700px){.event-card{flex-wrap:wrap}.ec-directions{order:3;width:100%;margin-top:6px}}
 @media(max-width:700px){.layout{grid-template-columns:1fr}.sidebar{display:none}.meals-grid{grid-template-columns:repeat(4,1fr)}}

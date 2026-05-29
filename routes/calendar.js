@@ -113,8 +113,8 @@ router.get('/all-events', requireAuth, async (req, res) => {
   }
 });
 
-// Parse pasted text into a draft event (preview, no write)
-router.post('/parse-event', requireAuth, (req, res) => {
+// Parse pasted text into a draft event (preview only — no Google access, no auth needed)
+router.post('/parse-event', (req, res) => {
   const text = ((req.body && req.body.text) || '').toString();
   if (!text.trim()) return res.status(400).json({ error: 'No text provided' });
   const p = parseEvent(text);
@@ -179,6 +179,40 @@ router.post('/events', requireAuth, async (req, res) => {
         ? 'Calendar write access not granted. Please Disconnect and sign in with Google again to allow adding events.'
         : 'Failed to create event',
     });
+  }
+});
+
+// Live driving time from origin to a destination, traffic-aware
+router.get('/travel', requireAuth, async (req, res) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return res.json({ available: false, reason: 'no_key' });
+
+  const { origin, destination } = req.query;
+  if (!origin || !destination) {
+    return res.status(400).json({ error: 'origin and destination are required' });
+  }
+  try {
+    const url = 'https://maps.googleapis.com/maps/api/distancematrix/json'
+      + `?origins=${encodeURIComponent(origin)}`
+      + `&destinations=${encodeURIComponent(destination)}`
+      + '&mode=driving&departure_time=now&key=' + key;
+    const r = await fetch(url);
+    const data = await r.json();
+    const el = data.rows && data.rows[0] && data.rows[0].elements && data.rows[0].elements[0];
+    if (!el || el.status !== 'OK') {
+      return res.json({ available: true, ok: false, status: (el && el.status) || data.status });
+    }
+    const dur = el.duration_in_traffic || el.duration;
+    res.json({
+      available: true,
+      ok: true,
+      durationSec: dur.value,
+      durationText: dur.text,
+      distanceText: el.distance && el.distance.text,
+    });
+  } catch (err) {
+    console.error('Travel lookup failed:', err.message);
+    res.status(500).json({ available: true, ok: false, error: 'lookup_failed' });
   }
 });
 

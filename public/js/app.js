@@ -115,6 +115,7 @@ async function loadGoogleEvents() {
     state.googleEvents = data.events || [];
     renderCalendarGrid();
     renderUpcoming();
+    renderToday();
   } catch(e) { console.warn(e.message); }
   finally { document.getElementById('loading-events').style.display = 'none'; }
 }
@@ -247,6 +248,109 @@ function renderUpcoming() {
   }).join('');
 }
 
+const pad2 = n => String(n).padStart(2, '0');
+const localDateStr = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+// Device location, requested at most once (false = tried and unavailable)
+let cachedPos = null;
+function getPosition() {
+  return new Promise(resolve => {
+    if (cachedPos !== null) return resolve(cachedPos || null);
+    if (!navigator.geolocation) { cachedPos = false; return resolve(null); }
+    navigator.geolocation.getCurrentPosition(
+      p => { cachedPos = `${p.coords.latitude.toFixed(6)},${p.coords.longitude.toFixed(6)}`; resolve(cachedPos); },
+      () => { cachedPos = false; resolve(null); },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  });
+}
+
+function todaysEvents() {
+  const ds = localDateStr(new Date());
+  return [
+    ...state.localEvents
+      .filter(e => e.date === ds)
+      .map(e => ({ title: e.title, start: `${e.date}T${e.time || '00:00'}`, allDay: !e.time, location: e.location, member: e.member })),
+    ...state.googleEvents.filter(e => (e.start || '').slice(0,10) === ds),
+  ].sort((a,b) => new Date(a.start) - new Date(b.start));
+}
+
+function renderToday() {
+  const el = document.getElementById('today-cards');
+  if (!el) return;
+  const now = new Date();
+  document.getElementById('today-date').textContent =
+    now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  const events = todaysEvents();
+  if (!events.length) {
+    el.innerHTML = `<div class="empty-card">${state.googleConnected
+      ? '🎉 Nothing scheduled today.'
+      : 'Connect Google Calendar to see today’s events.'}</div>`;
+    return;
+  }
+
+  el.innerHTML = events.map((ev, i) => {
+    const color = ev.calendarColor || memberColor(ev.member) || '#534ab7';
+    const start = new Date(ev.start);
+    const timeLabel = ev.allDay ? 'All day' : start.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+    const loc = ev.location;
+    const dir = loc ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(loc)}` : null;
+    return `<div class="event-card" style="border-left-color:${color}">
+      <div class="ec-time">${timeLabel}</div>
+      <div class="ec-body">
+        <div class="ec-title">${escapeHtml(ev.title || ev.summary || '(No title)')}</div>
+        ${loc ? `<div class="ec-loc">📍 ${escapeHtml(loc)}</div>` : ''}
+        ${loc && !ev.allDay ? `<div class="ec-travel" id="travel-${i}"></div>` : ''}
+      </div>
+      ${dir ? `<a class="ec-directions" href="${dir}" target="_blank" rel="noopener">Directions ›</a>` : ''}
+    </div>`;
+  }).join('');
+
+  fillTravelTimes(events);
+}
+
+// Fetch live driving ETAs for upcoming events that have a location
+async function fillTravelTimes(events) {
+  const targets = events
+    .map((ev, i) => ({ ev, i }))
+    .filter(x => x.ev.location && !x.ev.allDay && new Date(x.ev.start) > new Date());
+  if (!targets.length) return;
+
+  targets.forEach(({ i }) => {
+    const c = document.getElementById('travel-' + i);
+    if (c) c.innerHTML = '<span class="muted">Checking traffic…</span>';
+  });
+
+  const origin = await getPosition();
+  if (!origin) {
+    targets.forEach(({ i }) => {
+      const c = document.getElementById('travel-' + i);
+      if (c) c.innerHTML = '<span class="muted">Enable location for live travel time</span>';
+    });
+    return;
+  }
+
+  for (const { ev, i } of targets) {
+    const c = document.getElementById('travel-' + i);
+    if (!c) continue;
+    try {
+      const res = await fetch(`/api/travel?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(ev.location)}`);
+      if (res.status === 401) { c.innerHTML = '<span class="muted">Sign in for live ETA</span>'; return; }
+      const d = await res.json();
+      if (!d.available) {  // no Maps key configured — drop chips, stop asking
+        targets.forEach(({ i }) => { const x = document.getElementById('travel-' + i); if (x) x.innerHTML = ''; });
+        return;
+      }
+      if (!d.ok) { c.innerHTML = ''; continue; }
+      const leaveBy = new Date(new Date(ev.start).getTime() - d.durationSec * 1000);
+      const urgent = leaveBy.getTime() - Date.now() < 15 * 60 * 1000;
+      const leaveStr = leaveBy.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+      c.innerHTML = `<span class="travel-chip${urgent ? ' urgent' : ''}">🚗 ${d.durationText} · leave by ${leaveStr}</span>`;
+    } catch(e) { c.innerHTML = ''; }
+  }
+}
+
 function renderMeals() {
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   document.getElementById('meals-grid').innerHTML = days.map((d,i) =>
@@ -264,12 +368,14 @@ function renderLists() {
 }
 
 function showView(name) {
-  ['calendar','lists','meals'].forEach(v => {
+  const views = ['today','calendar','lists','meals'];
+  views.forEach(v => {
     document.getElementById('view-'+v).style.display = v === name ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-btn').forEach((btn,i) => {
-    btn.classList.toggle('active', ['calendar','lists','meals'][i] === name);
+    btn.classList.toggle('active', views[i] === name);
   });
+  if (name === 'today') renderToday();
 }
 
 function changeMonth(dir) {
@@ -446,6 +552,7 @@ function renderAll() {
   renderHeaderRight();
   renderGoogleStatus();
   renderMembers();
+  renderToday();
   renderCalendarGrid();
   renderUpcoming();
   renderLists();
