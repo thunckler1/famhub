@@ -1,7 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
+const chrono = require('chrono-node');
 const { getOAuthClient, requireAuth } = require('./auth');
+
+const pad = n => String(n).padStart(2, '0');
+const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const localTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+// Turn free-form pasted text into structured event fields
+function parseEvent(text) {
+  const results = chrono.parse(text, new Date(), { forwardDate: true });
+  let start = null, end = null, allDay = false, remaining = text;
+  if (results.length) {
+    const r = results[0];
+    start = r.start.date();
+    allDay = !r.start.isCertain('hour');
+    if (r.end) end = r.end.date();
+    remaining = (text.slice(0, r.index) + ' ' + text.slice(r.index + r.text.length))
+      .replace(/\s+/g, ' ').trim();
+  }
+  let location = null;
+  const locMatch = remaining.match(/\b(?:at|@)\s+(.+)$/i);
+  if (locMatch) {
+    location = locMatch[1].trim().replace(/[.,;]+$/, '');
+    remaining = remaining.slice(0, locMatch.index).trim();
+  }
+  let title = remaining.replace(/\ball[\s-]?day\b/i, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,–-]+|[\s,–-]+$/g, '')
+    .replace(/\b(?:on|at|the)\s*$/i, '').trim();
+  if (!title) title = location || text.trim().slice(0, 60) || 'New event';
+  return { title, location, start, end, allDay };
+}
 
 function getAuthenticatedClient(req) {
   const oauth2Client = getOAuthClient();
@@ -25,6 +56,7 @@ router.get('/calendars', requireAuth, async (req, res) => {
       name: cal.summary,
       color: cal.backgroundColor || '#4285F4',
       primary: cal.primary || false,
+      writable: cal.accessRole === 'owner' || cal.accessRole === 'writer',
     }));
     res.json({ calendars });
   } catch (err) {
@@ -78,6 +110,75 @@ router.get('/all-events', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Failed to fetch events:', err.message);
     res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+// Parse pasted text into a draft event (preview, no write)
+router.post('/parse-event', requireAuth, (req, res) => {
+  const text = ((req.body && req.body.text) || '').toString();
+  if (!text.trim()) return res.status(400).json({ error: 'No text provided' });
+  const p = parseEvent(text);
+  res.json({
+    foundDate: !!p.start,
+    parsed: {
+      title: p.title,
+      location: p.location,
+      date: p.start ? localDate(p.start) : null,
+      time: p.start && !p.allDay ? localTime(p.start) : null,
+      endTime: p.end && !p.allDay ? localTime(p.end) : null,
+      allDay: p.allDay,
+    },
+  });
+});
+
+// Create an event in Google Calendar
+router.post('/events', requireAuth, async (req, res) => {
+  const {
+    calendarId = 'primary', title, date, time, endTime, allDay, location, description,
+  } = req.body || {};
+  if (!title || !date) {
+    return res.status(400).json({ error: 'Title and date are required' });
+  }
+  try {
+    const auth = getAuthenticatedClient(req);
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    let start, end;
+    if (allDay || !time) {
+      const next = new Date(`${date}T00:00:00`);
+      next.setDate(next.getDate() + 1);
+      start = { date };
+      end = { date: localDate(next) };
+    } else {
+      let endStr = endTime;
+      if (!endStr) {
+        const d = new Date(`${date}T${time}:00`);
+        d.setHours(d.getHours() + 1);
+        endStr = localTime(d);
+      }
+      start = { dateTime: new Date(`${date}T${time}:00`).toISOString() };
+      end = { dateTime: new Date(`${date}T${endStr}:00`).toISOString() };
+    }
+
+    const result = await calendar.events.insert({
+      calendarId,
+      requestBody: {
+        summary: title,
+        location: location || undefined,
+        description: description || undefined,
+        start,
+        end,
+      },
+    });
+    res.json({ event: { id: result.data.id, htmlLink: result.data.htmlLink } });
+  } catch (err) {
+    console.error('Failed to create event:', err.message);
+    const insufficient = /insufficient|permission|forbidden|403|scope/i.test(err.message);
+    res.status(insufficient ? 403 : 500).json({
+      error: insufficient
+        ? 'Calendar write access not granted. Please Disconnect and sign in with Google again to allow adding events.'
+        : 'Failed to create event',
+    });
   }
 });
 

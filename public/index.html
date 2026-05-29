@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FamHub — hunck.ai</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=2">
 </head>
 <body>
   <header class="header">
@@ -28,8 +28,10 @@
         <div id="calendar-list"></div>
       </div>
       <div class="sidebar-section">
-        <div class="sidebar-label">Add family event</div>
-        <button class="add-btn" onclick="showAddEvent()">+ New event</button>
+        <div class="sidebar-label">Quick add event</div>
+        <textarea id="quick-paste" class="quick-paste" placeholder="Paste event details…&#10;e.g. Dentist Tue 9am"></textarea>
+        <button class="add-btn primary" onclick="quickAdd()">✨ Auto-add event</button>
+        <button class="text-link" onclick="showAddEvent()">or add manually</button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-label">Family</div>
@@ -81,19 +83,26 @@
 
   <div id="modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
     <div class="modal-box">
-      <h3>Add family event</h3>
+      <h3>Add to calendar</h3>
+      <div class="paste-box">
+        <label>📋 Paste event details</label>
+        <textarea id="ev-paste" placeholder="e.g. Emma's soccer practice Saturday 3pm at Lincoln Park"></textarea>
+        <button class="btn-parse" onclick="parsePaste()">✨ Auto-fill</button>
+        <div id="parse-hint" class="parse-hint"></div>
+      </div>
+      <div class="modal-divider"><span>or enter manually</span></div>
       <div class="field"><label>Event name</label><input type="text" id="ev-title" placeholder="e.g. Emma's soccer practice"></div>
       <div class="field-row">
         <div class="field"><label>Date</label><input type="date" id="ev-date"></div>
         <div class="field"><label>Time</label><input type="time" id="ev-time" value="09:00"></div>
       </div>
-      <div class="field"><label>For</label>
-        <select id="ev-member"></select>
-      </div>
+      <label class="allday-row"><input type="checkbox" id="ev-allday" onchange="toggleAllDay()"> All day</label>
+      <div class="field"><label>Location</label><input type="text" id="ev-location" placeholder="Optional"></div>
+      <div class="field"><label>Calendar</label><select id="ev-calendar"></select></div>
       <div class="field"><label>Notes</label><textarea id="ev-notes" placeholder="Any details for the family…"></textarea></div>
       <div class="modal-footer">
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-        <button class="btn-save" onclick="saveEvent()">Save event</button>
+        <button class="btn-save" id="ev-save" onclick="saveEvent()">Add to calendar</button>
       </div>
     </div>
   </div>
@@ -110,6 +119,7 @@
     </div>
   </div>
 
-  <script src="/js/app.js"></script>
+  <div id="toast" class="toast" style="display:none"></div>
+  <script src="/js/app.js?v=2"></script>
 </body>
 </html>

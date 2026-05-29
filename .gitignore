@@ -2,3 +2,6 @@ node_modules/
 .env
 client_secret*.json
 data/
+.claude/
+server.out.log
+server.err.log

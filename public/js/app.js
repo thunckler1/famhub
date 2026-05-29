@@ -93,7 +93,18 @@ async function loadGoogleCalendars() {
     const data = await res.json();
     state.googleCalendars = data.calendars || [];
     renderCalendarList();
+    renderCalendarTargets();
   } catch(e) { console.warn(e.message); }
+}
+
+function renderCalendarTargets() {
+  const sel = document.getElementById('ev-calendar');
+  if (!sel) return;
+  const writable = state.googleCalendars.filter(c => c.writable);
+  const list = writable.length ? writable : state.googleCalendars;
+  sel.innerHTML = list.map(c =>
+    `<option value="${c.id}"${c.primary ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
+  ).join('');
 }
 
 async function loadGoogleEvents() {
@@ -269,11 +280,76 @@ function changeMonth(dir) {
 function goToday() { state.currentDate = new Date(); renderCalendarGrid(); }
 
 function showAddEvent() {
+  document.getElementById('ev-paste').value = '';
+  document.getElementById('parse-hint').textContent = '';
+  document.getElementById('ev-title').value = '';
   document.getElementById('ev-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('ev-time').value = '09:00';
+  document.getElementById('ev-allday').checked = false;
+  toggleAllDay();
+  document.getElementById('ev-location').value = '';
+  document.getElementById('ev-notes').value = '';
+  renderCalendarTargets();
   document.getElementById('modal').style.display = 'flex';
+  if (!state.googleConnected) {
+    document.getElementById('parse-hint').textContent = 'Connect Google Calendar to add events.';
+  }
 }
 
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+function toggleAllDay() {
+  document.getElementById('ev-time').disabled = document.getElementById('ev-allday').checked;
+}
+
+function applyParsed(p) {
+  if (!p) return;
+  if (p.title) document.getElementById('ev-title').value = p.title;
+  if (p.date) document.getElementById('ev-date').value = p.date;
+  document.getElementById('ev-allday').checked = !!p.allDay;
+  toggleAllDay();
+  if (!p.allDay && p.time) document.getElementById('ev-time').value = p.time;
+  document.getElementById('ev-location').value = p.location || '';
+}
+
+// Parse the modal's paste box and fill the form fields
+async function parsePaste() {
+  const text = document.getElementById('ev-paste').value.trim();
+  const hint = document.getElementById('parse-hint');
+  if (!text) { hint.textContent = 'Paste or type something first.'; return; }
+  hint.textContent = 'Reading…';
+  try {
+    const res = await fetch('/api/parse-event', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (res.status === 401) { hint.textContent = 'Connect Google Calendar first.'; return; }
+    const data = await res.json();
+    applyParsed(data.parsed);
+    hint.textContent = data.foundDate
+      ? '✓ Filled in below — review, then add to calendar.'
+      : "Couldn't spot a date — please set it below.";
+  } catch(e) { hint.textContent = 'Could not read that. Enter details manually.'; }
+}
+
+// Sidebar quick-add: parse pasted text, then open the modal pre-filled to confirm
+async function quickAdd() {
+  const text = document.getElementById('quick-paste').value.trim();
+  if (!text) return;
+  showAddEvent();
+  document.getElementById('ev-paste').value = text;
+  await parsePaste();
+  document.getElementById('quick-paste').value = '';
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
 
 let familyDraft = [];
 
@@ -324,19 +400,34 @@ async function saveFamily() {
   renderUpcoming();
 }
 
-function saveEvent() {
+async function saveEvent() {
+  const hint = document.getElementById('parse-hint');
   const title = document.getElementById('ev-title').value.trim();
   const date = document.getElementById('ev-date').value;
-  const time = document.getElementById('ev-time').value;
-  const member = document.getElementById('ev-member').value;
-  const notes = document.getElementById('ev-notes').value;
-  if (!title || !date) return;
-  state.localEvents.push({id: Date.now(), title, date, time, member, notes});
-  closeModal();
-  document.getElementById('ev-title').value = '';
-  document.getElementById('ev-notes').value = '';
-  renderCalendarGrid();
-  renderUpcoming();
+  const allDay = document.getElementById('ev-allday').checked;
+  const time = allDay ? null : document.getElementById('ev-time').value;
+  const location = document.getElementById('ev-location').value.trim();
+  const description = document.getElementById('ev-notes').value.trim();
+  const calendarId = document.getElementById('ev-calendar').value || 'primary';
+  if (!title || !date) { hint.textContent = 'Please enter a name and a date.'; return; }
+
+  const btn = document.getElementById('ev-save');
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const res = await fetch('/api/events', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendarId, title, date, time, allDay, location, description }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to add event');
+    closeModal();
+    toast('✓ Added to your Google Calendar');
+    await loadGoogleEvents();
+  } catch(e) {
+    hint.textContent = e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add to calendar';
+  }
 }
 
 async function addItem(list) {

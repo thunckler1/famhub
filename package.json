@@ -8,10 +8,11 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "chrono-node": "^2.9.1",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "googleapis": "^140.0.0",
     "express-session": "^1.17.3",
-    "dotenv": "^16.3.1"
+    "googleapis": "^140.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
