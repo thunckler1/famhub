@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FamHub — hunck.ai</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="logo">📅 FamHub</div>
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showView('calendar')">Calendar</button>
+      <button class="nav-btn" onclick="showView('lists')">Lists</button>
+      <button class="nav-btn" onclick="showView('meals')">Meals</button>
+    </nav>
+    <div class="header-right" id="header-right"></div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Google Calendar</div>
+        <div id="google-status"></div>
+      </div>
+      <div class="sidebar-section" id="calendar-list-section" style="display:none">
+        <div class="sidebar-label">Your calendars</div>
+        <div id="calendar-list"></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Add family event</div>
+        <button class="add-btn" onclick="showAddEvent()">+ New event</button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Coming up</div>
+        <div id="upcoming-list"><p class="muted">Connect Google Calendar to see events.</p></div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div id="view-calendar">
+        <div class="view-header">
+          <div class="view-title" id="cal-month-label"></div>
+          <div class="view-controls">
+            <button class="icon-btn" onclick="changeMonth(-1)">‹</button>
+            <button class="text-btn" onclick="goToday()">Today</button>
+            <button class="icon-btn" onclick="changeMonth(1)">›</button>
+          </div>
+        </div>
+        <div id="calendar-grid"></div>
+        <div id="loading-events" class="loading" style="display:none">Loading Google Calendar events…</div>
+      </div>
+
+      <div id="view-lists" style="display:none">
+        <div class="view-header"><div class="view-title">Shared lists</div></div>
+        <div class="lists-grid">
+          <div class="list-card">
+            <h3>🛒 Grocery list</h3>
+            <ul id="grocery-list" class="checklist"></ul>
+            <div class="add-item-row"><input type="text" placeholder="Add item…" id="grocery-input"><button onclick="addItem('grocery')">Add</button></div>
+          </div>
+          <div class="list-card">
+            <h3>✅ Family to-dos</h3>
+            <ul id="todo-list" class="checklist"></ul>
+            <div class="add-item-row"><input type="text" placeholder="Add item…" id="todo-input"><button onclick="addItem('todo')">Add</button></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-meals" style="display:none">
+        <div class="view-header"><div class="view-title">Weekly meal planner</div></div>
+        <div class="meals-grid" id="meals-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+      <h3>Add family event</h3>
+      <div class="field"><label>Event name</label><input type="text" id="ev-title" placeholder="e.g. Emma's soccer practice"></div>
+      <div class="field-row">
+        <div class="field"><label>Date</label><input type="date" id="ev-date"></div>
+        <div class="field"><label>Time</label><input type="time" id="ev-time" value="09:00"></div>
+      </div>
+      <div class="field"><label>For</label>
+        <select id="ev-member">
+          <option value="dad">Dad</option>
+          <option value="mom">Mom</option>
+          <option value="jake">Jake</option>
+          <option value="emma">Emma</option>
+          <option value="liam">Liam</option>
+          <option value="sofia">Sofia</option>
+          <option value="gp1">Grandma & Grandpa J</option>
+          <option value="gp2">Grandma & Grandpa M</option>
+        </select>
+      </div>
+      <div class="field"><label>Notes</label><textarea id="ev-notes" placeholder="Any details for the family…"></textarea></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-save" onclick="saveEvent()">Save event</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
