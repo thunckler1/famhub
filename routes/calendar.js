@@ -308,6 +308,34 @@ router.post('/events', requireAuth, async (req, res) => {
   }
 });
 
+// Google Places autocomplete suggestions for the location field
+router.get('/places', requireAuth, async (req, res) => {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return res.json({ available: false, reason: 'no_key', predictions: [] });
+
+  const q = ((req.query.q) || '').toString().trim();
+  if (q.length < 3) return res.json({ available: true, predictions: [] });
+
+  try {
+    let url = 'https://maps.googleapis.com/maps/api/place/autocomplete/json'
+      + '?input=' + encodeURIComponent(q) + '&key=' + key;
+    if (req.query.sessiontoken) url += '&sessiontoken=' + encodeURIComponent(req.query.sessiontoken);
+    const r = await fetch(url);
+    const d = await r.json();
+    if (d.status !== 'OK' && d.status !== 'ZERO_RESULTS') {
+      console.error('Places autocomplete:', d.status, d.error_message || '');
+      return res.json({ available: true, predictions: [], status: d.status, error: d.error_message });
+    }
+    res.json({
+      available: true,
+      predictions: (d.predictions || []).slice(0, 5).map(p => ({ description: p.description, placeId: p.place_id })),
+    });
+  } catch (err) {
+    console.error('Places lookup failed:', err.message);
+    res.status(500).json({ available: true, predictions: [], error: 'lookup_failed' });
+  }
+});
+
 // Live driving time from origin to a destination, traffic-aware
 router.get('/travel', requireAuth, async (req, res) => {
   const key = process.env.GOOGLE_MAPS_API_KEY;

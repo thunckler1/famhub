@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>FamHub — hunck.ai</title>
-  <link rel="stylesheet" href="/css/style.css?v=4">
+  <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
   <header class="header">
@@ -64,9 +64,14 @@
         <div class="view-header">
           <div class="view-title" id="cal-month-label"></div>
           <div class="view-controls">
-            <button class="icon-btn" onclick="changeMonth(-1)">‹</button>
+            <div class="cal-view-toggle">
+              <button class="cal-view-btn" data-view="day" onclick="setCalView('day')">Day</button>
+              <button class="cal-view-btn" data-view="week" onclick="setCalView('week')">Week</button>
+              <button class="cal-view-btn active" data-view="month" onclick="setCalView('month')">Month</button>
+            </div>
+            <button class="icon-btn" onclick="navigate(-1)">‹</button>
             <button class="text-btn" onclick="goToday()">Today</button>
-            <button class="icon-btn" onclick="changeMonth(1)">›</button>
+            <button class="icon-btn" onclick="navigate(1)">›</button>
           </div>
         </div>
         <div id="calendar-grid"></div>
@@ -112,7 +117,10 @@
         <div class="field"><label>Time</label><input type="time" id="ev-time" value="09:00"></div>
       </div>
       <label class="allday-row"><input type="checkbox" id="ev-allday" onchange="toggleAllDay()"> All day</label>
-      <div class="field"><label>Location</label><input type="text" id="ev-location" placeholder="Optional"></div>
+      <div class="field location-field"><label>Location</label>
+        <input type="text" id="ev-location" placeholder="Optional — start typing to search" autocomplete="off">
+        <div id="ev-location-suggest" class="suggest-list" style="display:none"></div>
+      </div>
       <div class="field"><label>Repeats</label>
         <select id="ev-repeat">
           <option value="">Does not repeat</option>
@@ -145,6 +153,6 @@
   </div>
 
   <div id="toast" class="toast" style="display:none"></div>
-  <script src="/js/app.js?v=4"></script>
+  <script src="/js/app.js?v=6"></script>
 </body>
 </html>

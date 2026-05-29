@@ -5,3 +5,5 @@ data/
 .claude/
 server.out.log
 server.err.log
+server.log
+run-famhub.ps1

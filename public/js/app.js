@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderAll();
   await Promise.all([loadMembers(), loadLists()]);
   renderAll();
+  initLocationAutocomplete();
 });
 
 async function checkGoogleStatus() {
@@ -176,50 +177,113 @@ function renderCalendarList() {
   ).join('');
 }
 
-function renderCalendarGrid() {
-  const year = state.currentDate.getFullYear();
-  const month = state.currentDate.getMonth();
-  const today = new Date();
-  document.getElementById('cal-month-label').textContent =
-    state.currentDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+function startOfWeek(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
 
+function eventsForDate(ds) {
+  return [
+    ...state.localEvents.filter(e => e.date === ds)
+      .map(e => ({ title: e.title, start: `${e.date}T${e.time || '00:00'}`, allDay: !e.time, location: e.location, member: e.member })),
+    ...state.googleEvents.filter(e => (e.start || '').slice(0,10) === ds),
+  ].sort((a, b) => new Date(a.start) - new Date(b.start));
+}
+
+// One day cell for the month/week grids
+function dayCellHtml(date, opts = {}) {
+  const ds = localDateStr(date);
+  const isToday = date.toDateString() === new Date().toDateString();
+  const evs = eventsForDate(ds);
+  const shown = evs.slice(0, opts.max || 3);
+  const extra = evs.length - shown.length;
+  const pills = shown.map(ev => {
+    const color = ev.calendarColor || memberColor(ev.member);
+    const r=parseInt(color.slice(1,3),16), g=parseInt(color.slice(3,5),16), b=parseInt(color.slice(5,7),16);
+    const time = (opts.showTime && !ev.allDay) ? new Date(ev.start).toLocaleTimeString('en-US', { hour:'numeric' }) + ' ' : '';
+    const title = (ev.title || ev.summary || '').slice(0, 22);
+    return `<div class="event-pill" style="background:rgba(${r},${g},${b},0.12);color:${color}">${escapeHtml(time + title)}</div>`;
+  }).join('');
+  return `<div class="cal-day${opts.inMonth === false ? ' other-month' : ''}${isToday ? ' today' : ''}${opts.tall ? ' tall' : ''}">
+    <div class="day-num">${date.getDate()}</div>${pills}
+    ${extra > 0 ? `<div class="more-events">+${extra} more</div>` : ''}
+  </div>`;
+}
+
+const WEEK_HEADERS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function monthGridHtml() {
+  const year = state.currentDate.getFullYear(), month = state.currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-  let html = `<div class="cal-grid">`;
-  days.forEach(d => html += `<div class="cal-day-header">${d}</div>`);
-
-  const renderCell = (date, inMonth) => {
-    const ds = date.toISOString().slice(0, 10);
-    const isToday = date.toDateString() === today.toDateString();
-    const evs = [
-      ...state.localEvents.filter(e => e.date === ds),
-      ...state.googleEvents.filter(e => (e.start||'').slice(0,10) === ds),
-    ];
-    const shown = evs.slice(0, 3);
-    const extra = evs.length - shown.length;
-    const pills = shown.map(ev => {
-      const color = ev.calendarColor || memberColor(ev.member);
-      const r=parseInt(color.slice(1,3),16), g=parseInt(color.slice(3,5),16), b=parseInt(color.slice(5,7),16);
-      const bg = `rgba(${r},${g},${b},0.12)`;
-      const title = (ev.title||ev.summary||'').slice(0,20);
-      return `<div class="event-pill" style="background:${bg};color:${color}">${title}</div>`;
-    }).join('');
-    return `<div class="cal-day${!inMonth?' other-month':''}${isToday?' today':''}">
-      <div class="day-num">${date.getDate()}</div>${pills}
-      ${extra > 0 ? `<div class="more-events">+${extra} more</div>` : ''}
-    </div>`;
-  };
-
-  for (let i = 0; i < firstDay; i++) html += renderCell(new Date(year, month, -(firstDay-i-1)), false);
-  for (let d = 1; d <= daysInMonth; d++) html += renderCell(new Date(year, month, d), true);
+  let html = '<div class="cal-grid">';
+  WEEK_HEADERS.forEach(d => html += `<div class="cal-day-header">${d}</div>`);
+  for (let i = 0; i < firstDay; i++) html += dayCellHtml(new Date(year, month, -(firstDay-i-1)), { inMonth:false });
+  for (let d = 1; d <= daysInMonth; d++) html += dayCellHtml(new Date(year, month, d), { inMonth:true });
   const total = firstDay + daysInMonth;
   const trailing = total % 7 === 0 ? 0 : 7 - (total % 7);
-  for (let i = 1; i <= trailing; i++) html += renderCell(new Date(year, month+1, i), false);
+  for (let i = 1; i <= trailing; i++) html += dayCellHtml(new Date(year, month+1, i), { inMonth:false });
+  return html + '</div>';
+}
 
-  html += `</div>`;
-  document.getElementById('calendar-grid').innerHTML = html;
+function weekGridHtml() {
+  const start = startOfWeek(state.currentDate);
+  let html = '<div class="cal-grid week">';
+  WEEK_HEADERS.forEach(d => html += `<div class="cal-day-header">${d}</div>`);
+  for (let i = 0; i < 7; i++) {
+    html += dayCellHtml(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), { tall:true, max:6, showTime:true });
+  }
+  return html + '</div>';
+}
+
+function dayAgendaHtml() {
+  const evs = eventsForDate(localDateStr(state.currentDate));
+  const isToday = state.currentDate.toDateString() === new Date().toDateString();
+  if (!evs.length) return `<div class="empty-card">No events ${isToday ? 'today' : 'this day'}.</div>`;
+  return '<div class="today-cards">' + evs.map(ev => {
+    const color = ev.calendarColor || memberColor(ev.member);
+    const start = new Date(ev.start);
+    const timeLabel = ev.allDay ? 'All day' : start.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+    const loc = ev.location;
+    const dir = loc ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(loc)}` : null;
+    return `<div class="event-card" style="border-left-color:${color}">
+      <div class="ec-time">${timeLabel}</div>
+      <div class="ec-body"><div class="ec-title">${escapeHtml(ev.title || ev.summary || '(No title)')}</div>
+        ${loc ? `<div class="ec-loc">📍 ${escapeHtml(loc)}</div>` : ''}</div>
+      ${dir ? `<a class="ec-directions" href="${dir}" target="_blank" rel="noopener">Directions ›</a>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function calLabel() {
+  if (state.calView === 'day') return state.currentDate.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  if (state.calView === 'week') {
+    const s = startOfWeek(state.currentDate);
+    const e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 6);
+    const sameMonth = s.getMonth() === e.getMonth();
+    const sFmt = s.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    const eFmt = sameMonth
+      ? `${e.getDate()}, ${e.getFullYear()}`
+      : e.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    return `${sFmt} – ${eFmt}`;
+  }
+  return state.currentDate.toLocaleString('en-US', { month:'long', year:'numeric' });
+}
+
+function renderCalendarGrid() {
+  if (!state.calView) state.calView = 'month';
+  document.getElementById('cal-month-label').textContent = calLabel();
+  const grid = document.getElementById('calendar-grid');
+  grid.innerHTML = state.calView === 'week' ? weekGridHtml()
+    : state.calView === 'day' ? dayAgendaHtml()
+    : monthGridHtml();
+  document.querySelectorAll('.cal-view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === state.calView));
+}
+
+function setCalView(view) {
+  state.calView = view;
+  renderCalendarGrid();
 }
 
 function renderUpcoming() {
@@ -266,13 +330,7 @@ function getPosition() {
 }
 
 function todaysEvents() {
-  const ds = localDateStr(new Date());
-  return [
-    ...state.localEvents
-      .filter(e => e.date === ds)
-      .map(e => ({ title: e.title, start: `${e.date}T${e.time || '00:00'}`, allDay: !e.time, location: e.location, member: e.member })),
-    ...state.googleEvents.filter(e => (e.start || '').slice(0,10) === ds),
-  ].sort((a,b) => new Date(a.start) - new Date(b.start));
+  return eventsForDate(localDateStr(new Date()));
 }
 
 function renderToday() {
@@ -378,8 +436,11 @@ function showView(name) {
   if (name === 'today') renderToday();
 }
 
-function changeMonth(dir) {
-  state.currentDate.setMonth(state.currentDate.getMonth() + dir);
+function navigate(dir) {
+  const d = state.currentDate;
+  if (state.calView === 'week') d.setDate(d.getDate() + 7 * dir);
+  else if (state.calView === 'day') d.setDate(d.getDate() + dir);
+  else d.setMonth(d.getMonth() + dir);
   renderCalendarGrid();
 }
 
@@ -394,6 +455,8 @@ function showAddEvent() {
   document.getElementById('ev-allday').checked = false;
   toggleAllDay();
   document.getElementById('ev-location').value = '';
+  hideLocationSuggest();
+  placeSessionToken = null;
   document.getElementById('ev-notes').value = '';
   applyRecurrence(null);
   renderCalendarTargets();
@@ -433,6 +496,78 @@ function applyRecurrence(rec) {
   opt.dataset.custom = '1';
   sel.add(opt, sel.options[1]);  // right after "Does not repeat"
   sel.value = rec.rrule;
+}
+
+// --- Location autocomplete (Google Places via /api/places) ---
+let placeSessionToken = null;
+let placeDebounce = null;
+
+function initLocationAutocomplete() {
+  const input = document.getElementById('ev-location');
+  const box = document.getElementById('ev-location-suggest');
+  if (!input || !box || input.dataset.acInit) return;
+  input.dataset.acInit = '1';
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    clearTimeout(placeDebounce);
+    if (q.length < 3) { hideLocationSuggest(); return; }
+    placeDebounce = setTimeout(() => fetchPlaces(q), 250);
+  });
+  input.addEventListener('keydown', (e) => {
+    const items = [...box.querySelectorAll('.suggest-item')];
+    if (!items.length) return;
+    let idx = items.findIndex(i => i.classList.contains('active'));
+    if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(items.length - 1, idx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(0, idx - 1); }
+    else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); items[idx].click(); } return; }
+    else if (e.key === 'Escape') { hideLocationSuggest(); return; }
+    else return;
+    items.forEach((it, i) => it.classList.toggle('active', i === idx));
+  });
+  input.addEventListener('blur', () => setTimeout(hideLocationSuggest, 150));
+}
+
+function hideLocationSuggest() {
+  const box = document.getElementById('ev-location-suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+async function fetchPlaces(q) {
+  if (!placeSessionToken) {
+    placeSessionToken = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+  }
+  try {
+    const res = await fetch(`/api/places?q=${encodeURIComponent(q)}&sessiontoken=${placeSessionToken}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.status === 'REQUEST_DENIED' || (data.error && !(data.predictions || []).length)) {
+      showLocationHint('Enable the “Places API” on your Maps key to get suggestions');
+      return;
+    }
+    renderLocationSuggest(data.predictions || []);
+  } catch(e) { /* network hiccup — leave field as typed */ }
+}
+
+function showLocationHint(msg) {
+  const box = document.getElementById('ev-location-suggest');
+  box.innerHTML = `<div class="suggest-hint">${escapeHtml(msg)}</div>`;
+  box.style.display = 'block';
+}
+
+function renderLocationSuggest(preds) {
+  const box = document.getElementById('ev-location-suggest');
+  if (!preds.length) { hideLocationSuggest(); return; }
+  box.innerHTML = preds.map(p => `<div class="suggest-item" data-desc="${escapeHtml(p.description)}">${escapeHtml(p.description)}</div>`).join('');
+  box.style.display = 'block';
+  box.querySelectorAll('.suggest-item').forEach(it => {
+    it.addEventListener('mousedown', (e) => {
+      e.preventDefault();  // fire before blur hides the list
+      document.getElementById('ev-location').value = it.dataset.desc;
+      placeSessionToken = null;  // selecting ends the billing session
+      hideLocationSuggest();
+    });
+  });
 }
 
 // Parse the modal's paste box and fill the form fields
