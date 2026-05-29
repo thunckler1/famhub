@@ -32,6 +32,11 @@
         <button class="add-btn" onclick="showAddEvent()">+ New event</button>
       </div>
       <div class="sidebar-section">
+        <div class="sidebar-label">Family</div>
+        <div id="member-list"></div>
+        <button class="add-btn" onclick="showFamily()">Edit family</button>
+      </div>
+      <div class="sidebar-section">
         <div class="sidebar-label">Coming up</div>
         <div id="upcoming-list"><p class="muted">Connect Google Calendar to see events.</p></div>
       </div>
@@ -83,21 +88,24 @@
         <div class="field"><label>Time</label><input type="time" id="ev-time" value="09:00"></div>
       </div>
       <div class="field"><label>For</label>
-        <select id="ev-member">
-          <option value="dad">Dad</option>
-          <option value="mom">Mom</option>
-          <option value="jake">Jake</option>
-          <option value="emma">Emma</option>
-          <option value="liam">Liam</option>
-          <option value="sofia">Sofia</option>
-          <option value="gp1">Grandma & Grandpa J</option>
-          <option value="gp2">Grandma & Grandpa M</option>
-        </select>
+        <select id="ev-member"></select>
       </div>
       <div class="field"><label>Notes</label><textarea id="ev-notes" placeholder="Any details for the family…"></textarea></div>
       <div class="modal-footer">
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
         <button class="btn-save" onclick="saveEvent()">Save event</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="family-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeFamily()">
+    <div class="modal-box">
+      <h3>Edit family</h3>
+      <div id="family-rows" class="family-rows"></div>
+      <button class="add-btn" onclick="addMember()">+ Add member</button>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeFamily()">Cancel</button>
+        <button class="btn-save" onclick="saveFamily()">Save</button>
       </div>
     </div>
   </div>

@@ -1,14 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
-const { getOAuthClient } = require('./auth');
-
-function requireAuth(req, res, next) {
-  if (!req.session.tokens) {
-    return res.status(401).json({ error: 'Not connected to Google Calendar' });
-  }
-  next();
-}
+const { getOAuthClient, requireAuth } = require('./auth');
 
 function getAuthenticatedClient(req) {
   const oauth2Client = getOAuthClient();

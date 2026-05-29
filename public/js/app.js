@@ -10,23 +10,68 @@ const state = {
   meals: ['Spaghetti night', 'Taco Tuesday', 'Leftovers', "Grandma J's cooking!", 'Pizza Friday', 'BBQ at home', 'Meal prep Sunday'],
 };
 
-const MEMBER_COLORS = {
-  dad:'#534ab7', mom:'#d4537e', jake:'#1d9e75',
-  emma:'#d85a30', liam:'#378add', sofia:'#ba7517',
-  gp1:'#888780', gp2:'#639922',
-};
+const DEFAULT_MEMBERS = [
+  {key:'dad', name:'Dad', color:'#534ab7'},
+  {key:'mom', name:'Mom', color:'#d4537e'},
+  {key:'jake', name:'Jake', color:'#1d9e75'},
+  {key:'emma', name:'Emma', color:'#d85a30'},
+  {key:'liam', name:'Liam', color:'#378add'},
+  {key:'sofia', name:'Sofia', color:'#ba7517'},
+  {key:'gp1', name:'Grandma & Grandpa J', color:'#888780'},
+  {key:'gp2', name:'Grandma & Grandpa M', color:'#639922'},
+];
+state.members = DEFAULT_MEMBERS.map(m => ({...m}));
+
+function memberColor(key) {
+  const m = state.members.find(m => m.key === key);
+  return m ? m.color : '#534ab7';
+}
+
+async function loadMembers() {
+  try {
+    const res = await fetch('/api/family');
+    const data = await res.json();
+    if (Array.isArray(data.members) && data.members.length) state.members = data.members;
+  } catch(e) { console.warn('Could not load family:', e.message); }
+}
+
+async function saveMembers() {
+  const res = await fetch('/api/family', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ members: state.members }),
+  });
+  if (!res.ok) throw new Error('Save failed');
+  const data = await res.json();
+  if (Array.isArray(data.members)) state.members = data.members;
+}
+
+async function loadLists() {
+  try {
+    const res = await fetch('/api/lists');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.grocery)) state.groceryItems = data.grocery;
+    if (Array.isArray(data.todo)) state.todoItems = data.todo;
+  } catch(e) { console.warn('Could not load lists:', e.message); }
+}
+
+async function saveLists() {
+  const res = await fetch('/api/lists', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grocery: state.groceryItems, todo: state.todoItems }),
+  });
+  if (!res.ok) throw new Error('Save failed');
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('connected') === 'true') history.replaceState({}, '', '/');
   await checkGoogleStatus();
   renderAll();
-  const saved = localStorage.getItem('famhub-lists');
-  if (saved) {
-    const data = JSON.parse(saved);
-    state.groceryItems = data.grocery || state.groceryItems;
-    state.todoItems = data.todo || state.todoItems;
-  }
+  await Promise.all([loadMembers(), loadLists()]);
+  renderAll();
 });
 
 async function checkGoogleStatus() {
@@ -94,6 +139,25 @@ function renderGoogleStatus() {
   }
 }
 
+function renderMembers() {
+  document.getElementById('member-list').innerHTML = state.members.map(m =>
+    `<div class="cal-item"><div class="cal-dot" style="background:${m.color}"></div><span>${escapeHtml(m.name)}</span></div>`
+  ).join('');
+  const sel = document.getElementById('ev-member');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = state.members.map(m =>
+      `<option value="${m.key}">${escapeHtml(m.name)}</option>`
+    ).join('');
+    if (state.members.some(m => m.key === prev)) sel.value = prev;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function renderCalendarList() {
   document.getElementById('calendar-list').innerHTML = state.googleCalendars.map(cal =>
     `<div class="cal-item"><div class="cal-dot" style="background:${cal.color}"></div><span>${cal.name}</span></div>`
@@ -124,7 +188,7 @@ function renderCalendarGrid() {
     const shown = evs.slice(0, 3);
     const extra = evs.length - shown.length;
     const pills = shown.map(ev => {
-      const color = ev.calendarColor || MEMBER_COLORS[ev.member] || '#534ab7';
+      const color = ev.calendarColor || memberColor(ev.member);
       const r=parseInt(color.slice(1,3),16), g=parseInt(color.slice(3,5),16), b=parseInt(color.slice(5,7),16);
       const bg = `rgba(${r},${g},${b},0.12)`;
       const title = (ev.title||ev.summary||'').slice(0,20);
@@ -150,7 +214,7 @@ function renderUpcoming() {
   const el = document.getElementById('upcoming-list');
   const now = new Date();
   const upcoming = [
-    ...state.localEvents.map(e => ({...e, startStr: e.date+'T'+(e.time||'00:00'), color: MEMBER_COLORS[e.member]||'#534ab7'})),
+    ...state.localEvents.map(e => ({...e, startStr: e.date+'T'+(e.time||'00:00'), color: memberColor(e.member)})),
     ...state.googleEvents.map(e => ({...e, startStr: e.start, color: e.calendarColor||'#4285f4'})),
   ].filter(e => new Date(e.startStr) >= now)
    .sort((a,b) => new Date(a.startStr) - new Date(b.startStr))
@@ -211,6 +275,55 @@ function showAddEvent() {
 
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
+let familyDraft = [];
+
+function showFamily() {
+  familyDraft = state.members.map(m => ({...m}));
+  renderFamilyRows();
+  document.getElementById('family-modal').style.display = 'flex';
+}
+
+function closeFamily() { document.getElementById('family-modal').style.display = 'none'; }
+
+function renderFamilyRows() {
+  document.getElementById('family-rows').innerHTML = familyDraft.map((m, i) =>
+    `<div class="family-row">
+      <input type="color" value="${m.color}" oninput="familyDraft[${i}].color=this.value">
+      <input type="text" class="family-name" value="${escapeHtml(m.name)}" placeholder="Name" oninput="familyDraft[${i}].name=this.value">
+      <button class="family-remove" title="Remove" onclick="removeMember(${i})">×</button>
+    </div>`
+  ).join('');
+}
+
+function addMember() {
+  const n = familyDraft.length;
+  familyDraft.push({key: 'm' + Date.now() + '-' + n, name: '', color: '#534ab7'});
+  renderFamilyRows();
+}
+
+function removeMember(i) {
+  familyDraft.splice(i, 1);
+  renderFamilyRows();
+}
+
+async function saveFamily() {
+  const cleaned = familyDraft
+    .map(m => ({...m, name: (m.name || '').trim()}))
+    .filter(m => m.name);
+  if (!cleaned.length) { alert('Add at least one family member.'); return; }
+  state.members = cleaned;
+  try {
+    await saveMembers();
+  } catch(e) {
+    alert('Could not save to the server. Please try again.');
+    return;
+  }
+  closeFamily();
+  renderMembers();
+  renderCalendarGrid();
+  renderUpcoming();
+}
+
 function saveEvent() {
   const title = document.getElementById('ev-title').value.trim();
   const date = document.getElementById('ev-date').value;
@@ -226,20 +339,22 @@ function saveEvent() {
   renderUpcoming();
 }
 
-function addItem(list) {
+async function addItem(list) {
   const input = document.getElementById(list+'-input');
   const val = input.value.trim();
   if (!val) return;
   if (list === 'grocery') state.groceryItems.push(val);
   else state.todoItems.push(val);
   input.value = '';
-  localStorage.setItem('famhub-lists', JSON.stringify({grocery: state.groceryItems, todo: state.todoItems}));
   renderLists();
+  try { await saveLists(); }
+  catch(e) { alert('Could not save to the server. Please try again.'); }
 }
 
 function renderAll() {
   renderHeaderRight();
   renderGoogleStatus();
+  renderMembers();
   renderCalendarGrid();
   renderUpcoming();
   renderLists();

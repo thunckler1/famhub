@@ -10,6 +10,14 @@ function getOAuthClient() {
   );
 }
 
+// Shared middleware: require a signed-in Google session
+function requireAuth(req, res, next) {
+  if (!req.session.tokens) {
+    return res.status(401).json({ error: 'Not connected to Google Calendar' });
+  }
+  next();
+}
+
 // Redirect to Google login
 router.get('/google', (req, res) => {
   const oauth2Client = getOAuthClient();
@@ -71,3 +79,4 @@ router.get('/logout', (req, res) => {
 
 module.exports = router;
 module.exports.getOAuthClient = getOAuthClient;
+module.exports.requireAuth = requireAuth;

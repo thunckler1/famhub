@@ -4,6 +4,8 @@ const session = require('express-session');
 const path = require('path');
 const authRoutes = require('./routes/auth');
 const calendarRoutes = require('./routes/calendar');
+const familyRoutes = require('./routes/family');
+const listsRoutes = require('./routes/lists');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,6 +28,8 @@ app.use(session({
 
 app.use('/auth', authRoutes);
 app.use('/api', calendarRoutes);
+app.use('/api', familyRoutes);
+app.use('/api', listsRoutes);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

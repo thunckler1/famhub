@@ -76,4 +76,10 @@ input,select,textarea{font-family:inherit;font-size:14px}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid #f0ede8}
 .btn-cancel{padding:8px 16px;border-radius:8px;border:1px solid #e0ddd8;background:transparent;font-size:13px;color:#666}
 .btn-save{padding:8px 18px;border-radius:8px;border:none;background:#534ab7;color:#fff;font-size:13px;font-weight:500}
+.family-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;max-height:50vh;overflow-y:auto}
+.family-row{display:flex;align-items:center;gap:8px}
+.family-row input[type=color]{width:34px;height:34px;padding:2px;border:1px solid #e0ddd8;border-radius:8px;background:#fff;cursor:pointer;flex-shrink:0}
+.family-row .family-name{flex:1;padding:8px 10px;border:1px solid #e0ddd8;border-radius:8px;font-size:13px}
+.family-remove{width:30px;height:30px;flex-shrink:0;border-radius:8px;border:1px solid #e0ddd8;background:#fff;color:#aaa;font-size:18px;line-height:1}
+.family-remove:hover{background:#fff0f0;color:#c0392b;border-color:#f0d0d0}
 @media(max-width:700px){.layout{grid-template-columns:1fr}.sidebar{display:none}.meals-grid{grid-template-columns:repeat(4,1fr)}}
