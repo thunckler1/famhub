@@ -395,6 +395,7 @@ function showAddEvent() {
   toggleAllDay();
   document.getElementById('ev-location').value = '';
   document.getElementById('ev-notes').value = '';
+  applyRecurrence(null);
   renderCalendarTargets();
   document.getElementById('modal').style.display = 'flex';
   if (!state.googleConnected) {
@@ -416,6 +417,22 @@ function applyParsed(p) {
   toggleAllDay();
   if (!p.allDay && p.time) document.getElementById('ev-time').value = p.time;
   document.getElementById('ev-location').value = p.location || '';
+  applyRecurrence(p.recurrence);
+}
+
+// Set the Repeats dropdown from a parsed { rrule, label }, adding a custom option when needed
+function applyRecurrence(rec) {
+  const sel = document.getElementById('ev-repeat');
+  sel.querySelectorAll('option[data-custom]').forEach(o => o.remove());
+  if (!rec || !rec.rrule) { sel.value = ''; return; }
+  const standard = [...sel.options].find(o => o.value === rec.rrule);
+  if (standard) { sel.value = rec.rrule; return; }
+  const opt = document.createElement('option');
+  opt.value = rec.rrule;
+  opt.textContent = rec.label || 'Custom repeat';
+  opt.dataset.custom = '1';
+  sel.add(opt, sel.options[1]);  // right after "Does not repeat"
+  sel.value = rec.rrule;
 }
 
 // Parse the modal's paste box and fill the form fields
@@ -515,6 +532,7 @@ async function saveEvent() {
   const location = document.getElementById('ev-location').value.trim();
   const description = document.getElementById('ev-notes').value.trim();
   const calendarId = document.getElementById('ev-calendar').value || 'primary';
+  const recurrence = document.getElementById('ev-repeat').value || null;
   if (!title || !date) { hint.textContent = 'Please enter a name and a date.'; return; }
 
   const btn = document.getElementById('ev-save');
@@ -522,7 +540,7 @@ async function saveEvent() {
   try {
     const res = await fetch('/api/events', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ calendarId, title, date, time, allDay, location, description }),
+      body: JSON.stringify({ calendarId, title, date, time, allDay, location, description, recurrence }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to add event');
